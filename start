@@ -1,0 +1,18 @@
+#!/bin/bash
+
+name="dexy_http@127.0.0.1"
+
+case $1 in
+	-a) # attach
+		sudo iex --name console@127.0.0.1 --remsh $name
+		;;
+	-b) # start in background
+		sudo MIX_ENV=dev elixir --name $name --detached --no-halt -S mix
+		;;	
+	-h) # help
+		cat $0
+		;;	
+	*)  # start with console
+		sudo MIX_ENV=dev iex --name $name -S mix
+		;;
+esac
