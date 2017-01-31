@@ -9,7 +9,7 @@ defmodule DexyPortHTTP do
   require Logger
 
   def start(_type, _args) do
-    compile_dispatch |> start_server
+    compile_dispatch() |> start_server
     opts = [strategy: :one_for_one, name: __MODULE__.Supervisor]
     Supervisor.start_link(opts)
   end
@@ -21,16 +21,15 @@ defmodule DexyPortHTTP do
   @default_pool_size 10
 
   def start_server dispatch do
-    http_handler = config[:handler] || (
-      Logger.warn "handler: not configured, default: #{__MODULE__.Handler}";
-      __MODULE__.Handler
-    )
-    pool_size = config[:pool_size] || (
+    pool_size = config()[:pool_size] || (
       Logger.warn "pool_size: not configured, default: #{@default_pool_size}";
       @default_pool_size
     )
-    protocols = config[:protocols] || throw :protocols_not_configured
-    {:ok, _pid} = :cowboy.start_tls http_handler, pool_size, protocols[:https], %{
+    protocols = config()[:protocols] || throw :protocols_not_configured
+    {:ok, _pid} = :cowboy.start_clear :dexy_port_http, pool_size, protocols[:http], %{
+      env: %{dispatch: dispatch}
+    }
+    {:ok, _pid} = :cowboy.start_tls :dexy_port_https, pool_size, protocols[:https], %{
       env: %{dispatch: dispatch}
     }
   end
@@ -40,7 +39,7 @@ defmodule DexyPortHTTP do
   ]
 
   defp compile_dispatch do
-    dispatch = config[:dispatch] || (
+    dispatch = config()[:dispatch] || (
       Logger.warn "dispatch: not_configured, default: #{inspect @default_dispatch}";
       @default_dispatch
     )

@@ -27,7 +27,7 @@ defmodule DexyPortHTTP.Handler do
       opts: opts,
       header: req.headers,
       body: body(req),
-      callback: self,
+      callback: self(),
       peer: peer,
       remote_ip: remote_ip
     ] |> do_request
@@ -159,7 +159,7 @@ defmodule DexyPortHTTP.Handler do
   defp do_parse_path ["", ""] do {"", []} end 
   defp do_parse_path ["", app] do {app, []} end 
 
-  defp do_parse_path [app | args] do
+  defp do_parse_path ["", app | args] do
     args = Enum.map args, &URI.decode(&1)
     {app, args}
   end
