@@ -1,18 +1,48 @@
 defmodule DexyPortHTTP.Handler do
 
+  defmodule State do
+    defstruct rid: nil
+  end
+
   require Logger
 
+  default_loop_timeout = 60_000
+
   @app :dexy_port_http
+
   @engine_node Application.get_env(@app, __MODULE__)[:engine_node]
     || throw "engine_node: not configured"
+
   @engine_module Application.get_env(@app, __MODULE__)[:engine_module]
     || throw "engine_module: not configured"
+
   @engine_function Application.get_env(@app, __MODULE__)[:engine_function]
     || throw "engine_function: not configured"
 
-  def init(req, state) do
-    req = request(req) |> await |> reply(req)
-    {:ok, req, state}
+  @loop_timeout Application.get_env(@app, __MODULE__)[:loop_timeout] || (
+    Logger.warn "loop_timeout: not configured, default: #{default_loop_timeout}";
+    default_loop_timeout
+  ) 
+
+  def init(req, _opts) do
+    case request(req) do
+      {:ok, rid} ->
+        state = %State{rid: rid}
+        {:cowboy_loop, req, state, @loop_timeout, :hibernate}
+      {:error, reason} ->
+        req = set_response(code: 400, body: to_json reason) |> reply(req)
+        {:ok, req, nil}
+    end
+  end
+
+  def info msg, req, state = %{rid: rid} do
+    case msg do
+      {^rid, res} ->
+        handle_info res, req, state
+      invalid -> 
+        Logger.warn inspect(reply: invalid)
+        {:ok, req, state, :hibernate}
+    end
   end
 
   defp request req do
@@ -36,30 +66,36 @@ defmodule DexyPortHTTP.Handler do
   defp do_request props do
     Logger.debug inspect props
     case :rpc.call @engine_node, @engine_module, @engine_function, [props] do
-      {:ok, res} -> res[:rid]
+      {:ok, res} -> {:ok, res[:rid]}
       {:error, _reason} = err -> err
     end
   end
 
-  defp await {:error, :user_notfound} do
-    http_response code: 404, body: "UserNotFound"
+  defp handle_info {:error, :user_notfound}, req, state do
+    req = http_response(code: 404, body: "UserNotFound") |> reply(req)
+    {:stop, req, state}
   end
 
-  defp await {:error, :user_disabled} do
-    http_response code: 404, body: "UserDisabled"
+  defp handle_info {:error, :user_disabled}, req, state do
+    req = http_response(code: 404, body: "UserDisabled") |> reply(req)
+    {:stop, req, state}
   end
 
-  defp await rid do
-    receive do
-      {^rid, {:ok, res}} -> Logger.debug (inspect ok: res)
-        set_response res
-      {^rid, {:notify, msg}} -> Logger.debug (inspect notify: msg)
-        await(rid)
-      {^rid, {:error, error}} -> Logger.info (inspect error: error)
-        http_response code: error.code, body: to_json error
-    after
-      300_000 -> http_response code: 408, body: "RequestTimeout"
-    end
+  defp handle_info {:ok, res}, req, state do
+    Logger.debug (inspect ok: res)
+    req = set_response(res) |> reply(req)
+    {:stop, req, state}
+  end
+
+  defp handle_info {:nofity, res}, req, state do
+    Logger.debug (inspect notify: res)
+    {:ok, req, state, :hibernate}
+  end
+
+  defp handle_info {:error, error}, req, state do
+    Logger.info (inspect error: error)
+    req = http_response(code: error.code, body: to_json error) |> reply(req)
+    {:stop, req, state}
   end
 
   defp set_response(res) when is_bitstring(res) do

@@ -19,19 +19,28 @@ defmodule DexyPortHTTP do
   end
 
   @default_pool_size 10
+  @default_start_opts [
+    max_header_name_length: 64,
+    max_header_value_length: 4096,
+    max_headers: 100,
+    max_keepalive: 100,
+    max_method_length: 64,
+    request_timeout: 300_000,
+  ]
 
   def start_server dispatch do
     pool_size = config()[:pool_size] || (
       Logger.warn "pool_size: not configured, default: #{@default_pool_size}";
       @default_pool_size
     )
+    start_opts = config()[:start_opts] || (
+      Logger.warn "start_opts: not configured, default: #{@default_start_opts}";
+      @default_start_opts 
+    )
+    start_opts = start_opts |> Enum.into(%{}) |> Map.merge(%{env: %{dispatch: dispatch}})
     protocols = config()[:protocols] || throw :protocols_not_configured
-    {:ok, _pid} = :cowboy.start_clear :dexy_port_http, pool_size, protocols[:http], %{
-      env: %{dispatch: dispatch}
-    }
-    {:ok, _pid} = :cowboy.start_tls :dexy_port_https, pool_size, protocols[:https], %{
-      env: %{dispatch: dispatch}
-    }
+    {:ok, _pid} = :cowboy.start_clear :dexy_port_http, pool_size, protocols[:http], start_opts
+    {:ok, _pid} = :cowboy.start_tls :dexy_port_https, pool_size, protocols[:https], start_opts
   end
 
   @default_dispatch [
