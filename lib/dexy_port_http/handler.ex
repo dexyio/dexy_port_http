@@ -64,7 +64,7 @@ defmodule DexyPortHTTP.Handler do
   end
 
   defp do_request props do
-    Logger.debug inspect props
+    #Logger.debug inspect props
     case :rpc.call @engine_node, @engine_module, @engine_function, [props] do
       {:ok, res} -> {:ok, res[:rid]}
       {:error, _reason} = err -> err

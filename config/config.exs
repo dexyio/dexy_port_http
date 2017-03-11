@@ -24,6 +24,7 @@ config app, DexyPortHTTP,
     ],
     https: [
       port: 443,
+      cacertfile: 'priv/ssl/ca_bundle.crt',
       certfile: 'priv/ssl/certificate.crt',
       keyfile: 'priv/ssl/private.key'
     ]
